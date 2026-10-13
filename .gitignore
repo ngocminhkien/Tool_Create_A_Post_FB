@@ -1,0 +1,34 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Next.js build output
+/.next/
+/out/
+/build
+
+# Testing & Coverage
+/coverage
+
+# Environment & Secret files
+.env
+.env*.local
+
+# Database & Runtime Data (Protect API keys and local databases)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.json
+!data/.gitkeep
+
+# TypeScript build info
+*.tsbuildinfo
+next-env.d.ts
+
+# Agent logs & temporary scratchpads
+.agents/
+
+# OS files
+.DS_Store
+Thumbs.db
