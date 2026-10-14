@@ -265,8 +265,8 @@ export function addBulkKeys(rawText: string): {
 
   const candidateKeys: string[] = [];
 
-  // 2. Global regex extract any Google AIza key (case-insensitive, any length >= 20)
-  const aizaMatches = cleanedText.match(/AIza[0-9A-Za-z\-_]{20,}/gi);
+  // 2. Global regex extract any Google AIza or AQ. key (case-insensitive, any length >= 20)
+  const aizaMatches = cleanedText.match(/(?:AIza|AQ\.)[0-9A-Za-z\-_\.]{20,}/gi);
   if (aizaMatches) {
     candidateKeys.push(...aizaMatches);
   }
@@ -292,8 +292,8 @@ export function addBulkKeys(rawText: string): {
       token = token.replace(/^(bearer|key|token)\s+/i, "").trim();
     }
 
-    // Accept any valid key token: >= 15 alphanumeric/dash/underscore characters
-    if (token.length >= 15 && /^[0-9A-Za-z\-_]+$/.test(token)) {
+    // Accept any valid key token: >= 15 alphanumeric/dash/underscore/dot characters
+    if (token.length >= 15 && /^[0-9A-Za-z\-_\.]+$/.test(token)) {
       candidateKeys.push(token);
     }
   }
@@ -441,11 +441,11 @@ export async function generateTextWithKeyRotation(options: {
   }
 
   const allModels = [
-    "gemini-3.8-flash",
-    "gemini-3.5-flash-lite",
+    "gemini-flash-latest",
+    "gemini-flash-lite-latest",
     "gemini-3.1-flash-lite",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash",
   ];
   const totalReq = pool.keys.reduce((acc, k) => acc + k.successCount, 0);
   const rotatedStartModel = allModels[totalReq % allModels.length];

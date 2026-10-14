@@ -273,11 +273,12 @@ export default function GeminiKeysPoolPage() {
             aria-label="Chọn Model Gemini"
             className="px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-800 focus:outline-hidden"
           >
-            <option value="gemini-2.5-flash">Tự động xoay vòng Đa Model (3.8 / 3.5 / 3.1 / 2.5 Flash)</option>
+            <option value="gemini-flash-latest">Tự động xoay vòng Đa Model (Flash Latest / 3.1 / 3.5)</option>
+            <option value="gemini-flash-latest">Ưu tiên: gemini-flash-latest (Khuyên dùng)</option>
+            <option value="gemini-flash-lite-latest">Ưu tiên: gemini-flash-lite-latest</option>
+            <option value="gemini-3.1-flash-lite">Ưu tiên: gemini-3.1-flash-lite</option>
             <option value="gemini-3.8-flash">Ưu tiên: gemini-3.8-flash</option>
             <option value="gemini-3.5-flash-lite">Ưu tiên: gemini-3.5-flash-lite</option>
-            <option value="gemini-3.1-flash-lite">Ưu tiên: gemini-3.1-flash-lite</option>
-            <option value="gemini-2.5-flash-lite">Ưu tiên: gemini-2.5-flash-lite</option>
           </select>
 
           <button
