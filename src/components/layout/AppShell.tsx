@@ -79,9 +79,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchKeyStats();
-    const timer = setInterval(fetchKeyStats, 12000);
+    const timer = setInterval(fetchKeyStats, 15000);
     return () => clearInterval(timer);
-  }, [pathname]);
+  }, []);
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row bg-slate-100/70">
@@ -159,6 +159,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <Link
                     key={item.href}
                     href={item.href}
+                    prefetch={true}
                     onClick={() => setIsMobileOpen(false)}
                     className={`flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all ${
                       isActive
@@ -259,6 +260,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 title={item.label}
                 className={`flex items-center gap-3 rounded-xl transition-all ${
                   isCollapsed ? "p-3 justify-center" : "px-3.5 py-3"
@@ -389,6 +391,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link
               href="/keys"
+              prefetch={true}
               className="hidden md:inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition"
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -399,6 +402,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
             <Link
               href="/sheets"
+              prefetch={true}
               className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
