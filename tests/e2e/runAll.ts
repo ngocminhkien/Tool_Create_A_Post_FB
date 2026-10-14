@@ -20,9 +20,33 @@ import { runTier1F11Tests } from "./tier1/f11_ab_style_presets.test";
 import { runTier1F12Tests } from "./tier1/f12_ab_variations_editor.test";
 import { runTier1F13Tests } from "./tier1/f13_sqlite_migration.test";
 import { runTier1F14Tests } from "./tier1/f14_clean_typescript.test";
+
+// Requirements R1-R4: Harvester, Deduplication, AI Repurposing, Moderation Queue (F1 - F15)
+import { runTier1F1BoundedContextTests } from "./r1_r4/tier1/f1_bounded_context.test";
+import { runTier1F2DualInputModeTests } from "./r1_r4/tier1/f2_dual_input_mode.test";
+import { runTier1F3TabbedPageManagerTests } from "./r1_r4/tier1/f3_tabbed_page_manager.test";
+import { runTier1F4BoundedSchemaMigrationTests } from "./r1_r4/tier1/f4_bounded_schema_migration.test";
+import { runTier1F5ConfigurableCollectorTests } from "./r1_r4/tier1/f5_configurable_post_collector.test";
+import { runTier1F6MediaDownloaderTests } from "./r1_r4/tier1/f6_media_downloader.test";
+import { runTier1F7SmartDeduplicationTests } from "./r1_r4/tier1/f7_smart_deduplication.test";
+import { runTier1F8EvergreenFallbackTests } from "./r1_r4/tier1/f8_evergreen_fallback.test";
+import { runTier1F9GeminiKeyPoolTests } from "./r1_r4/tier1/f9_gemini_key_pool.test";
+import { runTier1F10AntiVerbatimRewriterTests } from "./r1_r4/tier1/f10_anti_verbatim_rewriter.test";
+import { runTier1F11AutoPolicyHashtagChainingTests } from "./r1_r4/tier1/f11_auto_policy_hashtag_chaining.test";
+import { runTier1F12MediaAttachmentLinkingTests } from "./r1_r4/tier1/f12_media_attachment_linking.test";
+import { runTier1F13SideBySideQueueTests } from "./r1_r4/tier1/f13_side_by_side_moderation_queue.test";
+import { runTier1F14ModerationActionsTests } from "./r1_r4/tier1/f14_moderation_actions.test";
+import { runTier1F15GraphApiPublishingTests } from "./r1_r4/tier1/f15_graph_api_media_publishing.test";
+
 import { runTier2BoundaryTests } from "./tier2/boundary_corner_cases.test";
+import { runTier2R1R4BoundaryTests } from "./r1_r4/tier2/boundary_corner_cases.test";
+
 import { runTier3CombinationTests } from "./tier3/cross_feature_combinations.test";
+import { runTier3R1R4CombinationTests } from "./r1_r4/tier3/cross_feature_combinations.test";
+
 import { runTier4ScenarioTests } from "./tier4/real_world_scenarios.test";
+import { runTier4R1R4ScenarioTests } from "./r1_r4/tier4/real_world_scenarios.test";
+
 import { TestSuiteSummary, TestResultItem } from "./types";
 
 interface SuiteExecutionEntry {
@@ -33,7 +57,7 @@ interface SuiteExecutionEntry {
 }
 
 const SUITE_REGISTRY: SuiteExecutionEntry[] = [
-  // Tier 1: Feature Coverage in Isolation (F1 - F14)
+  // --- Tier 1: Feature Coverage in Isolation (Social SEO & Policy Upgrade: F1 - F14) ---
   { tier: 1, feature: "F1", name: "Facebook Policy Guard Scanner", fn: runTier1F1Tests },
   { tier: 1, feature: "F2", name: "Policy Guard Quick-Fix Action", fn: runTier1F2Tests },
   { tier: 1, feature: "F3", name: "Social SEO Scorecard Engine", fn: runTier1F3Tests },
@@ -49,14 +73,34 @@ const SUITE_REGISTRY: SuiteExecutionEntry[] = [
   { tier: 1, feature: "F13", name: "SQLite Dynamic Schema Migration", fn: runTier1F13Tests },
   { tier: 1, feature: "F14", name: "Clean TypeScript Verification", fn: runTier1F14Tests },
 
-  // Tier 2: Boundary & Corner Cases (F1 - F14)
-  { tier: 2, feature: "F1-F14", name: "Boundary & Corner Cases", fn: runTier2BoundaryTests },
+  // --- Tier 1: Feature Coverage in Isolation (Harvester & Moderation Upgrade: R1-R4 F1 - F15) ---
+  { tier: 1, feature: "R1-F1", name: "Bounded Context Page Separation", fn: runTier1F1BoundedContextTests },
+  { tier: 1, feature: "R1-F2", name: "Dual Input Mode Source Pages", fn: runTier1F2DualInputModeTests },
+  { tier: 1, feature: "R1-F3", name: "Tabbed Page Manager Operations", fn: runTier1F3TabbedPageManagerTests },
+  { tier: 1, feature: "R1-F4", name: "SQLite Bounded Schema Dynamic Migration", fn: runTier1F4BoundedSchemaMigrationTests },
+  { tier: 1, feature: "R2-F5", name: "Configurable Post Collector (1-10)", fn: runTier1F5ConfigurableCollectorTests },
+  { tier: 1, feature: "R2-F6", name: "Media Downloader to Local Storage", fn: runTier1F6MediaDownloaderTests },
+  { tier: 1, feature: "R2-F7", name: "2-Layer Smart Deduplication", fn: runTier1F7SmartDeduplicationTests },
+  { tier: 1, feature: "R2-F8", name: "Evergreen Content Fallback (>15-30d)", fn: runTier1F8EvergreenFallbackTests },
+  { tier: 1, feature: "R3-F9", name: "Gemini 30-Key Pool Integration", fn: runTier1F9GeminiKeyPoolTests },
+  { tier: 1, feature: "R3-F10", name: "Unique Anti-Verbatim Content Rewriter", fn: runTier1F10AntiVerbatimRewriterTests },
+  { tier: 1, feature: "R3-F11", name: "Auto-Policy Guard & Hashtag Chaining", fn: runTier1F11AutoPolicyHashtagChainingTests },
+  { tier: 1, feature: "R3-F12", name: "Source Media Attachment Linking", fn: runTier1F12MediaAttachmentLinkingTests },
+  { tier: 1, feature: "R4-F13", name: "Side-by-Side Moderation Queue Contract", fn: runTier1F13SideBySideQueueTests },
+  { tier: 1, feature: "R4-F14", name: "Interactive Moderation Actions (4 Actions)", fn: runTier1F14ModerationActionsTests },
+  { tier: 1, feature: "R4-F15", name: "Enhanced Graph API Media Publishing", fn: runTier1F15GraphApiPublishingTests },
 
-  // Tier 3: Cross-Feature Combinations (Pairwise)
-  { tier: 3, feature: "COMB", name: "Cross-Feature Combinations", fn: runTier3CombinationTests },
+  // --- Tier 2: Boundary & Corner Cases ---
+  { tier: 2, feature: "F1-F14", name: "Boundary & Corner Cases (Social SEO)", fn: runTier2BoundaryTests },
+  { tier: 2, feature: "R1-R4", name: "Boundary & Corner Cases (R1-R4 Harvester)", fn: runTier2R1R4BoundaryTests },
 
-  // Tier 4: Real-World Editorial Scenarios
-  { tier: 4, feature: "SCENARIOS", name: "Real-World Editorial Scenarios", fn: runTier4ScenarioTests },
+  // --- Tier 3: Cross-Feature Combinations ---
+  { tier: 3, feature: "COMB", name: "Cross-Feature Combinations (Social SEO)", fn: runTier3CombinationTests },
+  { tier: 3, feature: "R1-R4-COMB", name: "Cross-Feature Combinations (R1-R4 Workflows)", fn: runTier3R1R4CombinationTests },
+
+  // --- Tier 4: Real-World Editorial Scenarios ---
+  { tier: 4, feature: "SCENARIOS", name: "Real-World Editorial Scenarios (Social SEO)", fn: runTier4ScenarioTests },
+  { tier: 4, feature: "R1-R4-SCEN", name: "Real-World Editorial Scenarios (R1-R4 Agency Workflows)", fn: runTier4R1R4ScenarioTests },
 ];
 
 export async function runAllSuites(): Promise<{

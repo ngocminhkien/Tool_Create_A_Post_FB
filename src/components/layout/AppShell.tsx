@@ -17,6 +17,7 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
+  CheckSquare,
 } from "lucide-react";
 import { KeyPoolStats } from "@/types/ai.types";
 
@@ -26,6 +27,12 @@ const NAV_ITEMS = [
     label: "Content Studio",
     subtitle: "Chọn Xã • Hook • Bài Cuối",
     icon: Sparkles,
+  },
+  {
+    href: "/moderation",
+    label: "Duyệt Bài & Xào Lại",
+    subtitle: "Bóc Tách Ý • Tinh Gọn • Duyệt",
+    icon: CheckSquare,
   },
   {
     href: "/sheets",
