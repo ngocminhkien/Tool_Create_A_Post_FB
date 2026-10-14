@@ -17,6 +17,11 @@ import {
   ModerationQueueItem,
   ModerationStatus,
 } from "@/types/sourcePost.types";
+import {
+  ObserverAccountItem,
+  ObserverAuthMode,
+  ObserverAccountStatus,
+} from "@/types/observerAccount.types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "app.db");
@@ -181,6 +186,20 @@ export function runMigrations(db: DatabaseSync): void {
       );
 
       CREATE INDEX IF NOT EXISTS idx_moderation_queue_status ON moderation_queue(status);
+      
+      CREATE TABLE IF NOT EXISTS fb_observer_accounts (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        identifier TEXT NOT NULL,
+        auth_mode TEXT NOT NULL DEFAULT 'public_profile',
+        user_token TEXT DEFAULT '',
+        avatar_url TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'active',
+        last_scanned_at TEXT,
+        pages_discovered_count INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
     `);
 
     // Safe dynamic migration for extra moderation_queue columns
@@ -1914,3 +1933,114 @@ export function getDbStats() {
     journalMode: "WAL (Write-Ahead Logging)",
   };
 }
+
+// ============================================================================
+// FACEBOOK OBSERVER ACCOUNTS REPOSITORY
+// ============================================================================
+
+export function getObserverAccounts(): ObserverAccountItem[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT id, name, identifier, auth_mode as authMode, user_token as userToken,
+           avatar_url as avatarUrl, status, last_scanned_at as lastScannedAt,
+           pages_discovered_count as pagesDiscoveredCount,
+           created_at as createdAt, updated_at as updatedAt
+    FROM fb_observer_accounts
+    ORDER BY created_at DESC
+  `).all() as Record<string, unknown>[];
+
+  return rows.map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    identifier: String(r.identifier),
+    authMode: (r.authMode as ObserverAuthMode) || "public_profile",
+    userToken: r.userToken ? String(r.userToken) : undefined,
+    avatarUrl: r.avatarUrl ? String(r.avatarUrl) : undefined,
+    status: (r.status as ObserverAccountStatus) || "active",
+    lastScannedAt: r.lastScannedAt ? String(r.lastScannedAt) : undefined,
+    pagesDiscoveredCount: Number(r.pagesDiscoveredCount || 0),
+    createdAt: String(r.createdAt || new Date().toISOString()),
+    updatedAt: String(r.updatedAt || new Date().toISOString()),
+  }));
+}
+
+export function getObserverAccountById(id: string): ObserverAccountItem | null {
+  const db = getDb();
+  const r = db.prepare(`
+    SELECT id, name, identifier, auth_mode as authMode, user_token as userToken,
+           avatar_url as avatarUrl, status, last_scanned_at as lastScannedAt,
+           pages_discovered_count as pagesDiscoveredCount,
+           created_at as createdAt, updated_at as updatedAt
+    FROM fb_observer_accounts
+    WHERE id = ?
+  `).get(id) as Record<string, unknown> | undefined;
+
+  if (!r) return null;
+
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    identifier: String(r.identifier),
+    authMode: (r.authMode as ObserverAuthMode) || "public_profile",
+    userToken: r.userToken ? String(r.userToken) : undefined,
+    avatarUrl: r.avatarUrl ? String(r.avatarUrl) : undefined,
+    status: (r.status as ObserverAccountStatus) || "active",
+    lastScannedAt: r.lastScannedAt ? String(r.lastScannedAt) : undefined,
+    pagesDiscoveredCount: Number(r.pagesDiscoveredCount || 0),
+    createdAt: String(r.createdAt || new Date().toISOString()),
+    updatedAt: String(r.updatedAt || new Date().toISOString()),
+  };
+}
+
+export function saveObserverAccount(
+  account: Omit<ObserverAccountItem, "id" | "createdAt" | "updatedAt"> & { id?: string; createdAt?: string; updatedAt?: string }
+): ObserverAccountItem {
+  const db = getDb();
+  const id = account.id || `fba_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const status = account.status || "active";
+  const authMode = account.authMode || "public_profile";
+
+  db.prepare(`
+    INSERT INTO fb_observer_accounts (
+      id, name, identifier, auth_mode, user_token, avatar_url,
+      status, last_scanned_at, pages_discovered_count, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      identifier = excluded.identifier,
+      auth_mode = excluded.auth_mode,
+      user_token = excluded.user_token,
+      avatar_url = excluded.avatar_url,
+      status = excluded.status,
+      pages_discovered_count = excluded.pages_discovered_count,
+      updated_at = datetime('now')
+  `).run(
+    id,
+    account.name.trim(),
+    account.identifier.trim(),
+    authMode,
+    account.userToken || "",
+    account.avatarUrl || "",
+    status,
+    account.lastScannedAt || null,
+    account.pagesDiscoveredCount || 0
+  );
+
+  return getObserverAccountById(id)!;
+}
+
+export function updateObserverAccountScan(id: string, count: number): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE fb_observer_accounts
+    SET pages_discovered_count = ?, last_scanned_at = datetime('now'), updated_at = datetime('now')
+    WHERE id = ?
+  `).run(count, id);
+}
+
+export function deleteObserverAccount(id: string): boolean {
+  const db = getDb();
+  const res = db.prepare("DELETE FROM fb_observer_accounts WHERE id = ?").run(id);
+  return res.changes > 0;
+}
+

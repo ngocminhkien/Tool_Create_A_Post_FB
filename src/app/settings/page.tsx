@@ -19,15 +19,18 @@ import {
   Info,
   RefreshCw,
   Check,
+  Users,
+  Sparkles,
 } from "lucide-react";
 import {
   TargetPageItem,
   SourcePageItem,
   SourcePageInputMode,
 } from "@/types/sourcePage.types";
+import ObserverAccountsTab from "@/components/settings/ObserverAccountsTab";
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<"target" | "source" | "database">("target");
+  const [activeTab, setActiveTab] = useState<"target" | "source" | "observer" | "database">("target");
 
   // Target Pages state
   const [targetPages, setTargetPages] = useState<TargetPageItem[]>([]);
@@ -425,6 +428,19 @@ export default function SettingsPage() {
 
         <button
           type="button"
+          onClick={() => setActiveTab("observer")}
+          className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition flex items-center gap-2 cursor-pointer border-b-2 ${
+            activeTab === "observer"
+              ? "border-violet-600 text-violet-700 bg-violet-50/50"
+              : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+          }`}
+        >
+          <Users className="w-4 h-4 text-violet-600" />
+          <span>Khám Phá Từ Nick FB</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab("database")}
           className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition flex items-center gap-2 cursor-pointer border-b-2 ${
             activeTab === "database"
@@ -712,14 +728,24 @@ export default function SettingsPage() {
                   Danh Sách Fanpage Nguồn Đang Theo Dõi ({sourcePages.length})
                 </h2>
               </div>
-              <button
-                type="button"
-                onClick={fetchSourcePages}
-                className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Tải lại</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("observer")}
+                  className="px-2.5 py-1 text-xs font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg transition flex items-center gap-1.5 cursor-pointer border border-violet-200"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-violet-600" />
+                  <span>Khám phá từ Nick FB</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={fetchSourcePages}
+                  className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Tải lại</span>
+                </button>
+              </div>
             </div>
 
             {loadingSources ? (
@@ -1009,7 +1035,17 @@ export default function SettingsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: DATABASE & SYSTEM HEALTH */}
+      {/* TAB 3: OBSERVER ACCOUNTS DISCOVERY */}
+      {/* ========================================================================= */}
+      {activeTab === "observer" && (
+        <ObserverAccountsTab
+          onImportSuccess={fetchSourcePages}
+          onSwitchToSourceTab={() => setActiveTab("source")}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 4: DATABASE & SYSTEM HEALTH */}
       {/* ========================================================================= */}
       {activeTab === "database" && <DatabaseManagerCard />}
     </div>
