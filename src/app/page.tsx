@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
+import Link from "next/link";
 import {
   Sparkles,
   Search,
@@ -81,10 +82,12 @@ export default function ContentStudioPage() {
   const [selectedHook, setSelectedHook] = useState<string>("");
   const [hookKeyUsed, setHookKeyUsed] = useState<string>("");
   const [loadingHook, setLoadingHook] = useState<boolean>(false);
+  const [hookError, setHookError] = useState<string | null>(null);
 
   // 3. Final Post Step State (Prompt 1-4 modes)
   const [executionMode, setExecutionMode] =
     useState<PromptExecutionMode>("modular");
+  const [postError, setPostError] = useState<string | null>(null);
   const [activePrompts, setActivePrompts] = useState<boolean[]>([
     true,
     true,
@@ -376,6 +379,7 @@ export default function ContentStudioPage() {
     if (!workingTopic) return;
     setLoadingHook(true);
     setStatusMessage(null);
+    setHookError(null);
 
     try {
       const res = await fetch("/api/ai/hook", {
@@ -403,9 +407,11 @@ export default function ContentStudioPage() {
         text: `Đã tạo ${hooks.length} phương án Hook bằng Key luân phiên ${data.usedKeyMasked}! Hãy chọn hoặc chỉnh sửa Hook bên dưới rồi bấm Tạo Bài Viết Cuối Cùng.`,
       });
     } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Lỗi tạo Hook";
+      setHookError(msg);
       setStatusMessage({
         type: "error",
-        text: err instanceof Error ? err.message : "Lỗi tạo Hook",
+        text: msg,
       });
     } finally {
       setLoadingHook(false);
@@ -416,15 +422,18 @@ export default function ContentStudioPage() {
   const handleGenerateFinalPost = async () => {
     if (!workingTopic) return;
     if (!selectedHook.trim()) {
+      const msg = "Bạn vui lòng bấm 'Tạo Hook' hoặc tự nhập câu Hook mở đầu ở Bước 2 trước khi tạo bài viết cuối cùng.";
+      setPostError(msg);
       setStatusMessage({
         type: "error",
-        text: "Bạn vui lòng bấm 'Tạo Hook' hoặc tự nhập câu Hook mở đầu ở Bước 2 trước khi tạo bài viết cuối cùng.",
+        text: msg,
       });
       return;
     }
 
     setLoadingPost(true);
     setStatusMessage(null);
+    setPostError(null);
 
     try {
       const res = await fetch("/api/ai/post", {
@@ -460,9 +469,11 @@ export default function ContentStudioPage() {
         } lượt gọi Gemini Key.`,
       });
     } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Lỗi tạo bài viết cuối cùng";
+      setPostError(msg);
       setStatusMessage({
         type: "error",
-        text: err instanceof Error ? err.message : "Lỗi tạo bài viết cuối cùng",
+        text: msg,
       });
     } finally {
       setLoadingPost(false);
@@ -1159,6 +1170,21 @@ export default function ContentStudioPage() {
                 </button>
               </div>
 
+              {hookError && (
+                <div className="p-3.5 text-xs bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{hookError}</span>
+                  </div>
+                  <Link
+                    href="/keys"
+                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition shrink-0"
+                  >
+                    Quản lý Key
+                  </Link>
+                </div>
+              )}
+
               {/* Generated Hook Options */}
               {generatedHooks.length > 0 && (
                 <div className="space-y-2">
@@ -1383,6 +1409,21 @@ export default function ContentStudioPage() {
                   )}
                 </button>
               </div>
+
+              {postError && (
+                <div className="p-3.5 text-xs bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center justify-between gap-3 mt-3">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{postError}</span>
+                  </div>
+                  <Link
+                    href="/keys"
+                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition shrink-0"
+                  >
+                    Quản lý Key
+                  </Link>
+                </div>
+              )}
             </div>
           </section>
         </div>
