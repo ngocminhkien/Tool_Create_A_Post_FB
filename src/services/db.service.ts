@@ -22,6 +22,11 @@ import {
   ObserverAuthMode,
   ObserverAccountStatus,
 } from "@/types/observerAccount.types";
+import {
+  pushToTurso,
+  syncFromTursoToLocal,
+  isTursoEnabled,
+} from "./tursoBridge.service";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "app.db");
@@ -222,6 +227,38 @@ export function runMigrations(db: DatabaseSync): void {
   }
 }
 
+function resolveDbPath(): string {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const tmpDir = path.join("/tmp", "data");
+    if (!fs.existsSync(tmpDir)) {
+      try {
+        fs.mkdirSync(tmpDir, { recursive: true });
+      } catch {
+        // ignore
+      }
+    }
+    const tmpDbPath = path.join(tmpDir, "app.db");
+    const localDbPath = path.join(process.cwd(), "data", "app.db");
+    if (!fs.existsSync(tmpDbPath) && fs.existsSync(localDbPath)) {
+      try {
+        fs.copyFileSync(localDbPath, tmpDbPath);
+      } catch {
+        // ignore
+      }
+    }
+    return tmpDbPath;
+  }
+
+  if (!fs.existsSync(DATA_DIR)) {
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    } catch {
+      // ignore
+    }
+  }
+  return DB_PATH;
+}
+
 /**
  * Initializes and returns the singleton SQLite database instance.
  * Sets WAL mode for concurrent, atomic read/writes.
@@ -229,15 +266,16 @@ export function runMigrations(db: DatabaseSync): void {
 export function getDb(): DatabaseSync {
   if (dbInstance) return dbInstance;
 
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-
-  const db = new DatabaseSync(DB_PATH);
+  const targetPath = resolveDbPath();
+  const db = new DatabaseSync(targetPath);
 
   // High performance PRAGMAs
-  db.exec("PRAGMA journal_mode = WAL;");
-  db.exec("PRAGMA foreign_keys = ON;");
+  try {
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA foreign_keys = ON;");
+  } catch {
+    // ignore
+  }
 
   // Create tables if not exist
   db.exec(`
@@ -336,6 +374,11 @@ export function getDb(): DatabaseSync {
   dbInstance = db;
   runMigrations(db);
   migrateInitialData(db);
+
+  if (isTursoEnabled()) {
+    syncFromTursoToLocal(db).catch(() => {});
+  }
+
   return dbInstance;
 }
 
@@ -2026,6 +2069,32 @@ export function saveObserverAccount(
     account.pagesDiscoveredCount || 0
   );
 
+  pushToTurso(`
+    INSERT INTO fb_observer_accounts (
+      id, name, identifier, auth_mode, user_token, avatar_url,
+      status, last_scanned_at, pages_discovered_count, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      identifier = excluded.identifier,
+      auth_mode = excluded.auth_mode,
+      user_token = excluded.user_token,
+      avatar_url = excluded.avatar_url,
+      status = excluded.status,
+      pages_discovered_count = excluded.pages_discovered_count,
+      updated_at = datetime('now')
+  `, [
+    id,
+    account.name.trim(),
+    account.identifier.trim(),
+    authMode,
+    account.userToken || "",
+    account.avatarUrl || "",
+    status,
+    account.lastScannedAt || null,
+    account.pagesDiscoveredCount || 0
+  ]);
+
   return getObserverAccountById(id)!;
 }
 
@@ -2036,11 +2105,18 @@ export function updateObserverAccountScan(id: string, count: number): void {
     SET pages_discovered_count = ?, last_scanned_at = datetime('now'), updated_at = datetime('now')
     WHERE id = ?
   `).run(count, id);
+
+  pushToTurso(`
+    UPDATE fb_observer_accounts
+    SET pages_discovered_count = ?, last_scanned_at = datetime('now'), updated_at = datetime('now')
+    WHERE id = ?
+  `, [count, id]);
 }
 
 export function deleteObserverAccount(id: string): boolean {
   const db = getDb();
   const res = db.prepare("DELETE FROM fb_observer_accounts WHERE id = ?").run(id);
+  pushToTurso("DELETE FROM fb_observer_accounts WHERE id = ?", [id]);
   return res.changes > 0;
 }
 

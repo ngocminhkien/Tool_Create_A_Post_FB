@@ -29,8 +29,12 @@ import {
 const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads", "source_media");
 
 function ensureUploadsDir(): void {
-  if (!fs.existsSync(UPLOADS_DIR)) {
-    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    }
+  } catch {
+    // Read-only filesystem in serverless environments
   }
 }
 
@@ -91,11 +95,15 @@ export async function downloadImageToLocal(
     const fileName = `${prefix}_${index}_${hash}${ext}`;
     const filePath = path.join(UPLOADS_DIR, fileName);
 
-    fs.writeFileSync(filePath, buffer);
-    return `/uploads/source_media/${fileName}`;
-  } catch (err) {
-    console.warn(`Không thể tải ảnh ${imageUrl}:`, err);
-    return null;
+    try {
+      fs.writeFileSync(filePath, buffer);
+      return `/uploads/source_media/${fileName}`;
+    } catch {
+      // In serverless / read-only environment (e.g. Vercel), fallback to original remote CDN URL
+      return imageUrl;
+    }
+  } catch {
+    return imageUrl;
   }
 }
 
