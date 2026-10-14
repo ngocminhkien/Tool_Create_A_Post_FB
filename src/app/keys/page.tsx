@@ -206,7 +206,7 @@ export default function GeminiKeysPoolPage() {
       });
       const data = await res.json();
 
-      if (!res.ok) {
+      if (!res.ok || data.success === false) {
         setBanner({
           type: "error",
           message: data.error || "Không thể thêm Key. Vui lòng kiểm tra lại định dạng.",

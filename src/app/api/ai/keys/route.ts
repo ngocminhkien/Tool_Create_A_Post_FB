@@ -45,11 +45,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(res);
     }
 
-    if (action === "add_bulk" && typeof rawKeys === "string") {
-      const res = addBulkKeys(rawKeys);
-      if (res.error) {
-        return NextResponse.json(res, { status: 400 });
-      }
+    if (action === "add_bulk") {
+      const raw = typeof rawKeys === "string" ? rawKeys : String(rawKeys || "");
+      const res = addBulkKeys(raw);
       return NextResponse.json(res);
     }
 

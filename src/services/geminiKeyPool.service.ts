@@ -227,68 +227,108 @@ export function resetAllKeyCooldowns() {
 }
 
 export function addBulkKeys(rawText: string): {
+  success: boolean;
   addedCount: number;
   reactivatedCount: number;
   totalFound: number;
   state: ReturnType<typeof getKeyPoolState>;
   error?: string;
+  keysAdded?: string[];
 } {
   const pool = ensureDataFile();
-  if (!rawText || typeof rawText !== "string" || !rawText.trim()) {
+  if (!rawText || typeof rawText !== "string") {
     return {
+      success: false,
       addedCount: 0,
       reactivatedCount: 0,
       totalFound: 0,
       state: getKeyPoolState(),
-      error: "Vui lòng dán ít nhất 1 mã Gemini API Key.",
+      error: "Vui lòng nhập ít nhất 1 mã API Key.",
     };
   }
 
-  // Regex extract any Google API key (starts with AIza and has 35 base64url chars = 39 chars)
-  const matches = rawText.match(/AIza[0-9A-Za-z\-_]{35}/g);
-  let candidateKeys: string[] = [];
+  // 1. Clean invisible characters, zero-width spaces, BOM, NBSP, carriage returns
+  const cleanedText = rawText
+    .replace(/[\u200B-\u200D\uFEFF\u00A0\u200E\u200F]/g, "")
+    .trim();
 
-  if (matches && matches.length > 0) {
-    candidateKeys = matches;
-  } else {
-    // Fallback: tokenize and clean quotes/spaces for slightly non-standard or truncated strings
-    candidateKeys = rawText
-      .split(/[\r\n,;\s]+/)
-      .map((s) => s.replace(/['"`]/g, "").trim())
-      .filter((s) => s.startsWith("AIza"));
+  if (!cleanedText) {
+    return {
+      success: false,
+      addedCount: 0,
+      reactivatedCount: 0,
+      totalFound: 0,
+      state: getKeyPoolState(),
+      error: "Nội dung vừa nhập rỗng hoặc chỉ chứa khoảng trắng.",
+    };
+  }
+
+  const candidateKeys: string[] = [];
+
+  // 2. Global regex extract any Google AIza key (case-insensitive, any length >= 20)
+  const aizaMatches = cleanedText.match(/AIza[0-9A-Za-z\-_]{20,}/gi);
+  if (aizaMatches) {
+    candidateKeys.push(...aizaMatches);
+  }
+
+  // 3. Tokenize by standard separators (newline, comma, semicolon, tab, whitespace)
+  const rawTokens = cleanedText
+    .split(/[\r\n,;\s\t]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  for (let token of rawTokens) {
+    // Strip surrounding quotes (double, single, backtick, angle brackets)
+    token = token.replace(/^['"`<]+|['"`>]+$/g, "").trim();
+
+    // Strip config prefixes like GEMINI_API_KEY=, API_KEY=, export KEY=
+    if (token.includes("=")) {
+      const parts = token.split("=");
+      token = parts[parts.length - 1].replace(/^['"`]+|['"`]+$/g, "").trim();
+    }
+
+    // Strip "Bearer " or "Key " prefix
+    if (/^(bearer|key|token)\s+/i.test(token)) {
+      token = token.replace(/^(bearer|key|token)\s+/i, "").trim();
+    }
+
+    // Accept any valid key token: >= 15 alphanumeric/dash/underscore characters
+    if (token.length >= 15 && /^[0-9A-Za-z\-_]+$/.test(token)) {
+      candidateKeys.push(token);
+    }
   }
 
   const uniqueCandidates = Array.from(new Set(candidateKeys));
 
   if (uniqueCandidates.length === 0) {
     return {
+      success: false,
       addedCount: 0,
       reactivatedCount: 0,
       totalFound: 0,
       state: getKeyPoolState(),
       error:
-        "Không tìm thấy Key Google Gemini hợp lệ nào trong nội dung bạn vừa nhập. Mã Key của Google Gemini luôn bắt đầu bằng 'AIza' (ví dụ: AIzaSy... 39 ký tự).",
+        "Không tìm thấy Key hợp lệ nào trong nội dung bạn vừa nhập. Mã Key của Google Gemini thường bắt đầu bằng 'AIza' (dài khoảng 39 ký tự).",
     };
   }
 
   let addedCount = 0;
   let reactivatedCount = 0;
+  const keysAdded: string[] = [];
 
   for (const key of uniqueCandidates) {
     const existing = pool.keys.find((k) => k.key === key);
     if (existing) {
       // Re-activate and reset previous error state
-      const wasBad = existing.status !== "active";
       existing.status = "active";
       existing.errorCount = 0;
       existing.rateLimitCount = 0;
       existing.cooldownUntil = null;
       existing.lastError = null;
-      if (wasBad) {
-        reactivatedCount++;
-      }
+      reactivatedCount++;
+      keysAdded.push(existing.maskedKey);
     } else {
-      pool.keys.push({
+      const newKeyItem: GeminiKeyItem = {
         id: `key-${pool.keys.length + 1}-${Date.now().toString().slice(-4)}`,
         key,
         maskedKey: maskApiKey(key),
@@ -299,16 +339,20 @@ export function addBulkKeys(rawText: string): {
         lastUsedAt: null,
         cooldownUntil: null,
         lastError: null,
-      });
+      };
+      pool.keys.push(newKeyItem);
       addedCount++;
+      keysAdded.push(newKeyItem.maskedKey);
     }
   }
 
   savePool(pool);
   return {
+    success: true,
     addedCount,
     reactivatedCount,
     totalFound: uniqueCandidates.length,
+    keysAdded,
     state: getKeyPoolState(),
   };
 }
