@@ -33,6 +33,23 @@ export function isTursoEnabled(): boolean {
   return Boolean(process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN);
 }
 
+let initPromise: Promise<void> | null = null;
+
+/**
+ * Ensures Turso has finished its initial sync to local SQLite.
+ */
+export function ensureTursoSynced(db: DatabaseSync): Promise<void> {
+  if (isInitialized) return Promise.resolve();
+  if (!isTursoEnabled()) {
+    isInitialized = true;
+    return Promise.resolve();
+  }
+  if (!initPromise) {
+    initPromise = syncFromTursoToLocal(db);
+  }
+  return initPromise;
+}
+
 /**
  * Asynchronously pushes an INSERT, UPDATE, or DELETE to Turso Cloud in the background.
  * Fire-and-forget: does not block the user response.
@@ -45,6 +62,20 @@ export function pushToTurso(sql: string, args: unknown[] = []): void {
     .execute({ sql, args: args as any })
     .catch((err) => {
       console.warn("Background Turso sync error:", err?.message || err);
+    });
+}
+
+/**
+ * Asynchronously executes a batch of statements on Turso Cloud in a single HTTP request.
+ */
+export function pushBatchToTurso(statements: Array<{ sql: string; args?: unknown[] }>): void {
+  const client = getTursoClient();
+  if (!client || statements.length === 0) return;
+
+  client
+    .batch(statements.map((s) => ({ sql: s.sql, args: (s.args || []) as any })))
+    .catch((err) => {
+      console.warn("Background Turso batch sync error:", err?.message || err);
     });
 }
 

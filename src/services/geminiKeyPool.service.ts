@@ -1,7 +1,14 @@
 import fs from "fs";
 import path from "path";
 import { GeminiKeyItem, KeyPoolStats } from "@/types/ai.types";
-import { saveKeys } from "./db.service";
+import {
+  saveKeys,
+  getAllKeys,
+  deleteKeyFromDb,
+  deleteInvalidKeysFromDb,
+  clearAllKeysFromDb,
+  ensureDbSynced,
+} from "./db.service";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const KEYS_FILE = path.join(DATA_DIR, "gemini-keys.json");
@@ -78,13 +85,53 @@ function buildInitialPool(): PersistedKeyPool {
   };
 }
 
+export async function ensureKeyPoolReady(): Promise<PersistedKeyPool> {
+  try {
+    await ensureDbSynced();
+    const dbKeys = getAllKeys();
+    if (dbKeys && dbKeys.length > 0) {
+      if (!memoryPool) {
+        memoryPool = {
+          currentIndex: 0,
+          totalFailovers: 0,
+          preferredModel: "gemini-2.5-flash",
+          keys: dbKeys,
+        };
+      } else {
+        memoryPool.keys = dbKeys;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return ensureDataFile();
+}
+
 function ensureDataFile(): PersistedKeyPool {
   if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    } catch {
+      // ignore read-only on serverless
+    }
   }
 
   if (!memoryPool) {
-    if (fs.existsSync(KEYS_FILE)) {
+    let dbKeys: GeminiKeyItem[] = [];
+    try {
+      dbKeys = getAllKeys();
+    } catch {
+      // ignore
+    }
+
+    if (dbKeys && dbKeys.length > 0) {
+      memoryPool = {
+        currentIndex: 0,
+        totalFailovers: 0,
+        preferredModel: "gemini-2.5-flash",
+        keys: dbKeys,
+      };
+    } else if (fs.existsSync(KEYS_FILE)) {
       try {
         const raw = fs.readFileSync(KEYS_FILE, "utf-8");
         if (raw.trim().length > 0) {
@@ -133,11 +180,10 @@ function savePool(pool: PersistedKeyPool) {
     fs.writeFileSync(tempFile, JSON.stringify(pool, null, 2), "utf-8");
     fs.renameSync(tempFile, KEYS_FILE);
   } catch {
-    // Ignore transient rename error on Windows if another reader has the handle open
     try {
       fs.writeFileSync(KEYS_FILE, JSON.stringify(pool, null, 2), "utf-8");
     } catch {
-      // ignore
+      // ignore read-only filesystem on Vercel
     }
   }
 }
@@ -170,28 +216,80 @@ export function getKeyPoolState(): {
 export function resetAllKeyCooldowns() {
   const pool = ensureDataFile();
   for (const k of pool.keys) {
-    k.status = "active";
-    k.cooldownUntil = null;
-    k.lastError = null;
+    if (k.status === "cooldown") {
+      k.status = "active";
+      k.cooldownUntil = null;
+      k.lastError = null;
+    }
   }
   savePool(pool);
   return getKeyPoolState();
 }
 
-export function addBulkKeys(rawText: string) {
+export function addBulkKeys(rawText: string): {
+  addedCount: number;
+  reactivatedCount: number;
+  totalFound: number;
+  state: ReturnType<typeof getKeyPoolState>;
+  error?: string;
+} {
   const pool = ensureDataFile();
-  const existingSet = new Set(pool.keys.map((k) => k.key));
-  const candidates = rawText
-    .split(/[\r\n,\s]+/)
-    .map((s) => s.trim())
-    .filter((s) => s.startsWith("AIza"));
+  if (!rawText || typeof rawText !== "string" || !rawText.trim()) {
+    return {
+      addedCount: 0,
+      reactivatedCount: 0,
+      totalFound: 0,
+      state: getKeyPoolState(),
+      error: "Vui lòng dán ít nhất 1 mã Gemini API Key.",
+    };
+  }
+
+  // Regex extract any Google API key (starts with AIza and has 35 base64url chars = 39 chars)
+  const matches = rawText.match(/AIza[0-9A-Za-z\-_]{35}/g);
+  let candidateKeys: string[] = [];
+
+  if (matches && matches.length > 0) {
+    candidateKeys = matches;
+  } else {
+    // Fallback: tokenize and clean quotes/spaces for slightly non-standard or truncated strings
+    candidateKeys = rawText
+      .split(/[\r\n,;\s]+/)
+      .map((s) => s.replace(/['"`]/g, "").trim())
+      .filter((s) => s.startsWith("AIza"));
+  }
+
+  const uniqueCandidates = Array.from(new Set(candidateKeys));
+
+  if (uniqueCandidates.length === 0) {
+    return {
+      addedCount: 0,
+      reactivatedCount: 0,
+      totalFound: 0,
+      state: getKeyPoolState(),
+      error:
+        "Không tìm thấy Key Google Gemini hợp lệ nào trong nội dung bạn vừa nhập. Mã Key của Google Gemini luôn bắt đầu bằng 'AIza' (ví dụ: AIzaSy... 39 ký tự).",
+    };
+  }
 
   let addedCount = 0;
-  for (const key of candidates) {
-    if (!existingSet.has(key)) {
-      existingSet.add(key);
+  let reactivatedCount = 0;
+
+  for (const key of uniqueCandidates) {
+    const existing = pool.keys.find((k) => k.key === key);
+    if (existing) {
+      // Re-activate and reset previous error state
+      const wasBad = existing.status !== "active";
+      existing.status = "active";
+      existing.errorCount = 0;
+      existing.rateLimitCount = 0;
+      existing.cooldownUntil = null;
+      existing.lastError = null;
+      if (wasBad) {
+        reactivatedCount++;
+      }
+    } else {
       pool.keys.push({
-        id: `key-${pool.keys.length + 1}-${Date.now().toString().slice(-3)}`,
+        id: `key-${pool.keys.length + 1}-${Date.now().toString().slice(-4)}`,
         key,
         maskedKey: maskApiKey(key),
         status: "active",
@@ -205,8 +303,14 @@ export function addBulkKeys(rawText: string) {
       addedCount++;
     }
   }
+
   savePool(pool);
-  return { addedCount, state: getKeyPoolState() };
+  return {
+    addedCount,
+    reactivatedCount,
+    totalFound: uniqueCandidates.length,
+    state: getKeyPoolState(),
+  };
 }
 
 export function removeKeyById(id: string) {
@@ -216,7 +320,49 @@ export function removeKeyById(id: string) {
     pool.currentIndex = 0;
   }
   savePool(pool);
+  try {
+    deleteKeyFromDb(id);
+  } catch {
+    // ignore
+  }
   return getKeyPoolState();
+}
+
+export function removeAllInvalidKeys(): {
+  removedCount: number;
+  state: ReturnType<typeof getKeyPoolState>;
+} {
+  const pool = ensureDataFile();
+  const invalidKeys = pool.keys.filter((k) => k.status === "invalid");
+  const removedCount = invalidKeys.length;
+  pool.keys = pool.keys.filter((k) => k.status !== "invalid");
+  if (pool.currentIndex >= pool.keys.length) {
+    pool.currentIndex = 0;
+  }
+  savePool(pool);
+  try {
+    deleteInvalidKeysFromDb();
+  } catch {
+    // ignore
+  }
+  return { removedCount, state: getKeyPoolState() };
+}
+
+export function clearAllKeys(): {
+  clearedCount: number;
+  state: ReturnType<typeof getKeyPoolState>;
+} {
+  const pool = ensureDataFile();
+  const clearedCount = pool.keys.length;
+  pool.keys = [];
+  pool.currentIndex = 0;
+  savePool(pool);
+  try {
+    clearAllKeysFromDb();
+  } catch {
+    // ignore
+  }
+  return { clearedCount, state: getKeyPoolState() };
 }
 
 export function setPreferredGeminiModel(model: string) {
@@ -240,6 +386,7 @@ export async function generateTextWithKeyRotation(options: {
   failoverAttempts: number;
   model: string;
 }> {
+  await ensureKeyPoolReady();
   const pool = ensureDataFile();
   const totalKeys = pool.keys.length;
 

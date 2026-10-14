@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   addBulkKeys,
+  clearAllKeys,
+  ensureKeyPoolReady,
   generateTextWithKeyRotation,
   getKeyPoolState,
+  removeAllInvalidKeys,
   removeKeyById,
   resetAllKeyCooldowns,
   setPreferredGeminiModel,
@@ -10,6 +13,7 @@ import {
 
 export async function GET() {
   try {
+    await ensureKeyPoolReady();
     const state = getKeyPoolState();
     return NextResponse.json(state);
   } catch (err: unknown) {
@@ -22,6 +26,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureKeyPoolReady();
     const body = await req.json();
     const { action, rawKeys, keyId, model } = body;
 
@@ -30,8 +35,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(state);
     }
 
+    if (action === "remove_invalid") {
+      const res = removeAllInvalidKeys();
+      return NextResponse.json(res);
+    }
+
+    if (action === "clear_all") {
+      const res = clearAllKeys();
+      return NextResponse.json(res);
+    }
+
     if (action === "add_bulk" && typeof rawKeys === "string") {
       const res = addBulkKeys(rawKeys);
+      if (res.error) {
+        return NextResponse.json(res, { status: 400 });
+      }
       return NextResponse.json(res);
     }
 

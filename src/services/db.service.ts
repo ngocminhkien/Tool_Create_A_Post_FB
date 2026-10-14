@@ -24,6 +24,8 @@ import {
 } from "@/types/observerAccount.types";
 import {
   pushToTurso,
+  pushBatchToTurso,
+  ensureTursoSynced,
   syncFromTursoToLocal,
   isTursoEnabled,
 } from "./tursoBridge.service";
@@ -691,6 +693,66 @@ export function saveKeys(keys: GeminiKeyItem[]): void {
     db.exec("ROLLBACK;");
     throw err;
   }
+
+  // Synchronize batch to Turso Cloud (serverless-persistent)
+  if (keys.length > 0) {
+    const upsertSql = `
+      INSERT INTO gemini_keys (
+        id, key, masked_key, status,
+        success_count, error_count, rate_limit_count,
+        last_used_at, cooldown_until, last_error, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(key) DO UPDATE SET
+        status = excluded.status,
+        success_count = excluded.success_count,
+        error_count = excluded.error_count,
+        rate_limit_count = excluded.rate_limit_count,
+        last_used_at = excluded.last_used_at,
+        cooldown_until = excluded.cooldown_until,
+        last_error = excluded.last_error,
+        updated_at = datetime('now')
+    `;
+
+    const batch = keys.map((k) => ({
+      sql: upsertSql,
+      args: [
+        k.id,
+        k.key,
+        k.maskedKey,
+        k.status,
+        k.successCount,
+        k.errorCount,
+        k.rateLimitCount,
+        k.lastUsedAt,
+        k.cooldownUntil,
+        k.lastError,
+      ],
+    }));
+    pushBatchToTurso(batch);
+  }
+}
+
+export function deleteKeyFromDb(id: string): void {
+  const db = getDb();
+  db.prepare("DELETE FROM gemini_keys WHERE id = ?").run(id);
+  pushToTurso("DELETE FROM gemini_keys WHERE id = ?", [id]);
+}
+
+export function deleteInvalidKeysFromDb(): number {
+  const db = getDb();
+  const res = db.prepare("DELETE FROM gemini_keys WHERE status = 'invalid'").run();
+  pushToTurso("DELETE FROM gemini_keys WHERE status = 'invalid'");
+  return Number(res.changes || 0);
+}
+
+export function clearAllKeysFromDb(): void {
+  const db = getDb();
+  db.prepare("DELETE FROM gemini_keys").run();
+  pushToTurso("DELETE FROM gemini_keys");
+}
+
+export function ensureDbSynced(): Promise<void> {
+  return ensureTursoSynced(getDb());
 }
 
 // ============================================================================
