@@ -69,7 +69,7 @@ function buildInitialPool(): PersistedKeyPool {
   return {
     currentIndex: 0,
     totalFailovers: 0,
-    preferredModel: "gemini-2.5-flash",
+    preferredModel: "gemini-3.1-flash-lite",
     keys: uniqueKeys.map((key, idx) => ({
       id: `key-${idx + 1}`,
       key,
@@ -94,7 +94,7 @@ export async function ensureKeyPoolReady(): Promise<PersistedKeyPool> {
         memoryPool = {
           currentIndex: 0,
           totalFailovers: 0,
-          preferredModel: "gemini-2.5-flash",
+          preferredModel: "gemini-3.1-flash-lite",
           keys: dbKeys,
         };
       } else {
@@ -150,6 +150,10 @@ function ensureDataFile(): PersistedKeyPool {
   // Auto-recover keys whose cooldown period has expired
   const now = Date.now();
   let changed = false;
+  if (memoryPool.preferredModel === "gemini-2.5-flash") {
+    memoryPool.preferredModel = "gemini-3.1-flash-lite";
+    changed = true;
+  }
   for (const k of memoryPool.keys) {
     if (k.status === "cooldown" && k.cooldownUntil) {
       if (new Date(k.cooldownUntil).getTime() <= now) {
